@@ -6,6 +6,7 @@ from app.models.article import Article
 from app.models.user import User
 from app import db, sbert_model
 import numpy as np
+import random
 
 community_bp = Blueprint('community', __name__)
 
@@ -14,6 +15,12 @@ community_bp = Blueprint('community', __name__)
 @jwt_required(optional=True)  # allow browsing without login
 def get_communities():
     communities = Community.query.all()
+    return jsonify([c.to_dict() for c in communities]), 200
+
+
+@community_bp.route("/random", methods=["GET"])
+def get_random_communities():
+    communities = Community.query.order_by(db.func.random()).limit(3).all()
     return jsonify([c.to_dict() for c in communities]), 200
 
 
@@ -167,7 +174,6 @@ def add_article(community_id):
     }), 201
 
 
-
 @community_bp.route("/communities/<int:community_id>/articles", methods=["GET"])
 def get_community_articles(community_id):
     articles = Article.query.filter_by(community_id=community_id, status="approved").all()
@@ -180,10 +186,50 @@ def get_community_articles(community_id):
             "tags": a.tags,
             "status": a.status,
             "created_at": a.created_at.isoformat(),
-            "author": a.author.user_name  # assuming 'author' relationship and 'user_name' field exist
+            "author": a.author.user_name
         })
     return jsonify(result), 200
 
+
+@community_bp.route("/articles/<int:article_id>", methods=["GET"])
+@jwt_required()
+def get_article(article_id):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user:
+        return jsonify({"error": "User not found"}), 404
+
+    article = Article.query.get_or_404(article_id)
+
+    return jsonify(article.to_dict()), 200
+
+@community_bp.route("/articles/random", methods=["GET"])
+def get_random_article():
+    try:
+        # Fetch only approved articles
+        articles = Article.query.filter_by(status="approved").all()
+
+        if not articles:
+            return jsonify({"message": "No approved articles found"}), 404
+
+        # Pick a random one
+        article = random.choice(articles)
+
+        result = {
+            "article_id": article.article_id,
+            "title": article.title,
+            "content": article.content,
+            "tags": article.tags,
+            "status": article.status,
+            "created_at": article.created_at.isoformat(),
+            "author": article.author.user_name if article.author else None,
+        }
+
+        return jsonify(result), 200
+
+    except Exception as e:
+        return jsonify({"error": str(e)}), 500
 
 @community_bp.route("/articles/feed", methods=["GET"])
 @jwt_required()

@@ -39,8 +39,10 @@ def register():
         return jsonify({'error': str(e)}), 500
 
 
-@auth_bp.route('/login', methods=['POST'])
+@auth_bp.route('/login', methods=['POST', 'OPTIONS'])
 def login():
+    if request.method == 'OPTIONS':
+        return '', 200
     try:
         data = request.get_json()
         user = User.query.filter_by(email=data['email']).first()

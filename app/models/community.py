@@ -57,7 +57,7 @@ class CommunityPost(db.Model):
             "content": self.content,
             "post_type": self.post_type,
             "status": self.status,
-            "created_at": self.created_at.isoformat() if self.created_at else None,
+            "created_at": self.created_at.date().isoformat() if self.created_at else None,
             "author": {
                 "user_id": self.author.user_id,
                 "username": self.author.user_name

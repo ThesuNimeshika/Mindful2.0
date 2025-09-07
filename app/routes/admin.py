@@ -53,14 +53,14 @@ def edit_community(community_id):
     return jsonify({"message": "Community updated", "community": community.to_dict()}), 200
 
 
-# @admin_bp.route("/communities/<int:community_id>", methods=["DELETE"])
-# @jwt_required()
-# @admin_required
-# def delete_community(community_id):
-#     community = Community.query.get_or_404(community_id)
-#     db.session.delete(community)
-#     db.session.commit()
-#     return jsonify({"message": "Community deleted"}), 200
+@admin_bp.route("/communities/<int:community_id>", methods=["DELETE"])
+@jwt_required()
+@admin_required
+def delete_community(community_id):
+    community = Community.query.get_or_404(community_id)
+    db.session.delete(community)
+    db.session.commit()
+    return jsonify({"message": "Community deleted"}), 200
 
 
 # Articles
@@ -68,8 +68,18 @@ def edit_community(community_id):
 @jwt_required()
 @admin_required
 def list_articles():
-    articles = Article.query.all()
+    status = request.args.get("status", "approved")  # default to "approved"
+    query = Article.query.filter_by(status=status)
+    articles = query.all()
     return jsonify([a.to_dict() for a in articles]), 200
+
+
+@admin_bp.route("/articles/<int:article_id>", methods=["GET"])
+@jwt_required()
+@admin_required
+def view_article(article_id):
+    article = Article.query.get_or_404(article_id)
+    return jsonify(article.to_dict()), 200
 
 
 @admin_bp.route("/articles/<int:article_id>/approve", methods=["PATCH"])
@@ -97,8 +107,18 @@ def delete_article(article_id):
 @jwt_required()
 @admin_required
 def list_posts():
-    posts = CommunityPost.query.all()
+    status = request.args.get("status", "approved")  # default to "approved"
+    query = CommunityPost.query.filter_by(status=status)
+    posts = query.all()
     return jsonify([p.to_dict() for p in posts]), 200
+
+
+@admin_bp.route("/posts/<int:post_id>", methods=["GET"])
+@jwt_required()
+@admin_required
+def view_post(post_id):
+    post = CommunityPost.query.get_or_404(post_id)
+    return jsonify(post.to_dict()), 200
 
 
 @admin_bp.route("/posts/<int:post_id>/approve", methods=["PATCH"])
@@ -141,6 +161,28 @@ def search_users():
     return jsonify([u.to_dict() for u in users]), 200
 
 
+@admin_bp.route("/users/<int:user_id>/type", methods=["PATCH"])
+@jwt_required()
+@admin_required
+def update_user_type(user_id):
+    user = User.query.get_or_404(user_id)
+    data = request.json
+    new_type = data.get("user_type")
+
+    if not new_type:
+        return jsonify({"error": "Missing user_type"}), 400
+
+    # validate allowed types
+    allowed_types = ["admin", "regular", "professional"]
+    if new_type not in allowed_types:
+        return jsonify({"error": f"Invalid user_type. Allowed: {allowed_types}"}), 400
+
+    user.user_type = new_type
+    db.session.commit()
+
+    return jsonify({"message": f"user_type updated to '{new_type}'"}), 200
+
+
 @admin_bp.route("/users/<int:user_id>", methods=["DELETE"])
 @jwt_required()
 @admin_required
@@ -152,7 +194,75 @@ def delete_user(user_id):
 
 
 #Questionnaires
-@admin_bp.route("/admin/questionnaires", methods=["POST"])
+# Get all questionnaires
+@admin_bp.route("/questionnaires", methods=["GET"])
+@jwt_required()
+@admin_required
+def get_questionnaires():
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user or user.user_type != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    questionnaires = Questionnaire.query.all()
+    result = []
+    for q in questionnaires:
+        result.append({
+            "id": q.id,
+            "title": q.title,
+            "description": q.description,
+            "questions": [
+                {
+                    "id": ques.id,
+                    "text": ques.text,
+                    "order": ques.order,
+                    "answers": [
+                        {"id": a.id, "text": a.text, "value": a.value}
+                        for a in ques.answers
+                    ],
+                }
+                for ques in q.questions
+            ],
+        })
+
+    return jsonify(result), 200
+
+
+# Get single questionnaire
+@admin_bp.route("/questionnaires/<int:id>", methods=["GET"])
+@jwt_required()
+@admin_required
+def get_questionnaire(id):
+    user_id = get_jwt_identity()
+    user = User.query.get(user_id)
+
+    if not user or user.user_type != "admin":
+        return jsonify({"error": "Unauthorized"}), 403
+
+    q = Questionnaire.query.get_or_404(id)
+    result = {
+        "id": q.id,
+        "title": q.title,
+        "description": q.description,
+        "questions": [
+            {
+                "id": ques.id,
+                "text": ques.text,
+                "order": ques.order,
+                "answers": [
+                    {"id": a.id, "text": a.text, "value": a.value}
+                    for a in ques.answers
+                ],
+            }
+            for ques in q.questions
+        ],
+    }
+
+    return jsonify(result), 200
+
+
+@admin_bp.route("/questionnaires", methods=["POST"])
 @jwt_required()
 @admin_required
 def create_questionnaire():
@@ -197,7 +307,7 @@ def create_questionnaire():
     return jsonify({"message": "Questionnaire created", "id": questionnaire.id}), 201
 
 
-@admin_bp.route("/admin/questionnaires/<int:id>", methods=["PUT"])
+@admin_bp.route("/questionnaires/<int:id>", methods=["PUT"])
 @jwt_required()
 @admin_required
 def update_questionnaire(id):
@@ -238,7 +348,7 @@ def update_questionnaire(id):
     return jsonify({"message": "Questionnaire updated"})
 
 
-@admin_bp.route("/admin/questionnaires/<int:id>", methods=["DELETE"])
+@admin_bp.route("/questionnaires/<int:id>", methods=["DELETE"])
 @jwt_required()
 @admin_required
 def delete_questionnaire(id):
@@ -256,7 +366,7 @@ def delete_questionnaire(id):
 
 #user type update
 # List all professionals
-@admin_bp.route('/admin/professionals', methods=['GET'])
+@admin_bp.route('/professionals', methods=['GET'])
 @jwt_required()
 @admin_required
 def list_professionals():
@@ -265,7 +375,7 @@ def list_professionals():
 
 
 # List all pending upgrade requests
-@admin_bp.route('/admin/professionals/pending', methods=['GET'])
+@admin_bp.route('/professionals/pending', methods=['GET'])
 @jwt_required()
 @admin_required
 def list_pending_professionals():
@@ -274,7 +384,7 @@ def list_pending_professionals():
 
 
 # Approve professional request
-@admin_bp.route('/admin/professionals/<int:user_id>/approve', methods=['PUT'])
+@admin_bp.route('/professionals/<int:user_id>/approve', methods=['PUT'])
 @jwt_required()
 @admin_required
 def approve_professional(user_id):
@@ -290,7 +400,7 @@ def approve_professional(user_id):
 
 
 # Reject professional request
-@admin_bp.route('/admin/professionals/<int:user_id>/reject', methods=['PUT'])
+@admin_bp.route('/professionals/<int:user_id>/reject', methods=['PUT'])
 @jwt_required()
 @admin_required
 def reject_professional(user_id):
@@ -306,7 +416,7 @@ def reject_professional(user_id):
 
 
 # Delete a professional
-@admin_bp.route('/admin/professionals/<int:user_id>', methods=['DELETE'])
+@admin_bp.route('/professionals/<int:user_id>', methods=['DELETE'])
 @jwt_required()
 @admin_required
 def delete_professional(user_id):

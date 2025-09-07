@@ -40,6 +40,6 @@ class Article(db.Model):
             "author_name": self.author.user_name if self.author else None,
             "status": self.status,
             "tags": self.tags.split(",") if self.tags else [],
-            "created_at": self.created_at.isoformat(),
-            "updated_at": self.updated_at.isoformat()
+            "created_at": self.created_at.date().isoformat(),
+            "updated_at": self.updated_at.date().isoformat()
         }

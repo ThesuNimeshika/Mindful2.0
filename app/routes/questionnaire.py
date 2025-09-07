@@ -6,6 +6,20 @@ from app.models.questionnaire import Questionnaire, Question, UserResponse, Answ
 quiz_bp = Blueprint('quiz', __name__)
 
 
+@quiz_bp.route("/questionnaires", methods=["GET"])
+@jwt_required()
+def get_all_questionnaires():
+    questionnaires = Questionnaire.query.all()
+    return jsonify([
+        {
+            "id": q.id,
+            "title": q.title,
+            "description": q.description
+        }
+        for q in questionnaires
+    ])
+
+
 @quiz_bp.route("/questionnaires/<int:id>", methods=["GET"])
 @jwt_required()
 def get_questionnaire(id):
@@ -23,7 +37,6 @@ def get_questionnaire(id):
             for q in sorted(questionnaire.questions, key=lambda x: x.order)
         ]
     })
-
 
 
 @quiz_bp.route("/questionnaires/<int:id>/submit", methods=["POST"])
